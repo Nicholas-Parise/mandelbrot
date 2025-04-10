@@ -10,3 +10,5 @@ the included .exe will run with the DLL files. To recompile you will need to ins
 ![image of fractal.](img/strands.png)
 ## the beauty is unmatched and iconic  
 ![image of fractal.](img/flowers.png)
+## Colours can really change the loops of the fractal and how we percieve it   
+![image of fractal.](img/colour-result.png)
