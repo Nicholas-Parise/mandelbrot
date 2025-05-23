@@ -3,21 +3,27 @@ uniform vec2 resolution;
 uniform float zoom;
 uniform vec2 pan;
 
+uniform vec2 origin;
+uniform vec2 delta;
+
+
 void main()
 {
+
     vec2 uv = gl_FragCoord.xy / resolution; // Normalized coordinates (0.0 to 1.0)
 
-    // Calculate the aspect ratio
+    /*
     float aspectRatio = resolution.x / resolution.y;
-
-    vec2 centeredUv = (uv - 0.5) * zoom;
-
-    centeredUv.x *= resolution.x / resolution.y;
-
     vec2 scale = vec2(
     (uv.x - 0.5) * 3.5 * zoom * aspectRatio/2.0 + pan.x,
     (uv.y - 0.5) * 2.0 * zoom + pan.y
     );
+*/
+
+    vec2 pixel = gl_FragCoord.xy;
+    //vec2 scale = (pixel * origin) + delta;
+
+    vec2 scale = pixel * delta + origin;
 
     vec3 colorA = vec3(0.15,0.15,0.60);
     vec3 colorB = vec3(0.75,0.25,0.25);
