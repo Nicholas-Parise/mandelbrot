@@ -154,7 +154,8 @@ void startRenderThread() {
                 }
 
                 sf::Image temp = mandlebrot(localDelta, localOrigin);
-                {
+                if (!newRenderRequested || !HARDWARE_ACCELERATION) {
+
                     std::lock_guard<std::mutex> lock(renderMutex);
                     MapTexture.update(temp);
                     renderReady = true;
@@ -207,17 +208,11 @@ int main()
 
     shader.setUniform("pan",sf::Glsl::Vec2(0.0f, 0.0f));
 
-    //pictures = mandlebrot(pan.x,pan.y,zoom);
-    //MapTexture.update(pictures);
-
     window.setActive(false);
-    //sf::Thread thread(&renderingThread, &window);
-    //thread.launch();
 
-     if(HARDWARE_ACCELERATION){
-       // std::thread(cpuRenderThread, pan, zoom).detach();
+    // if(HARDWARE_ACCELERATION){
        startRenderThread();
-     }
+    // }
 
     while (window.isOpen())
     {
@@ -230,11 +225,22 @@ int main()
             }
             if (const auto* resized = event->getIf<sf::Event::Resized>())
             {
+
+                sf::View view = window.getDefaultView();
+                view.setSize({resized->size.x, resized->size.y});
+                view.setCenter({resized->size.x / 2.f, resized->size.y / 2.f});
+                window.setView(view);
+
+
                 fullscreenQuad.setSize(sf::Vector2f(resized->size.x, resized->size.y));
                 shader.setUniform("resolution", sf::Glsl::Vec2(resized->size.x, resized->size.y));
 
-               ScreenWidth = resized->size.x;
-               ScreenHeight = resized->size.y;
+                ScreenWidth = resized->size.x;
+                ScreenHeight = resized->size.y;
+
+                pictures = sf::Image({ScreenWidth, ScreenHeight}, sf::Color::Black);
+                MapTexture.resize({ScreenWidth, ScreenHeight});
+                Background.setTexture(MapTexture, true);
 
                 next = true;
             }
@@ -362,22 +368,11 @@ int main()
             next = true;
         }
 
-
-        double aspectRatio = double(ScreenWidth) / double(ScreenHeight);
-
-        double scaledZoom = zoom * aspectRatio/2.0d;
-/*
-        sf::Vector2<double> origin = { 3.5d * scaledZoom / double(ScreenWidth), 2.0d * zoom / double(ScreenHeight) };
-
-        sf::Vector2<double> delta = {
-            (pan.x-0.5d * 3.5d * scaledZoom),
-            (pan.y-0.5d * 2.0d * zoom)
-        };
-*/
-
+        double aspectRatio = double(window.getSize().x) / double(window.getSize().y);
 
         sf::Vector2<double> delta = {
             zoom * aspectRatio / double(window.getSize().x),
+            //zoom / double(window.getSize().x),
             zoom / double(window.getSize().y)
         };
 
@@ -387,14 +382,16 @@ int main()
         };
 
         if(next){
-            if(!HARDWARE_ACCELERATION){
+
+            ScreenWidth = window.getSize().x;
+            ScreenHeight = window.getSize().y;
+
+
+/*            if(!HARDWARE_ACCELERATION){
                 pictures = mandlebrot(delta,origin);
                 MapTexture.update(pictures);
             }else{
-                //cancelRender = true;
-                //std::this_thread::sleep_for(std::chrono::milliseconds(10));
-                //cancelRender = false;
-                //std::thread(cpuRenderThread, delta, origin).detach();
+*/
                 {
                     std::lock_guard<std::mutex> lock(paramMutex);
                     threadDelta = delta;
@@ -402,7 +399,7 @@ int main()
                 }
                 renderReady = false;
                 newRenderRequested = true;
-           }
+           //}
             next = false;
         }
 
