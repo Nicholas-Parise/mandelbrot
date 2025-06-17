@@ -56,7 +56,7 @@ sf::Color linearInterpolation(sf::Color& color1, sf::Color& color2, int iteratio
 
 //sf::Image mandlebrot(long double xoffset, long double yoffset, long double zoom){
 
-sf::Image mandlebrot(sf::Vector2<long double> delta, sf::Vector2<long double> origin){
+sf::Image mandlebrot(sf::Vector2<long double> delta, sf::Vector2<long double> origin, int start, int end){
 
     int iteration = 0;
 
@@ -108,18 +108,6 @@ sf::Image mandlebrot(sf::Vector2<long double> delta, sf::Vector2<long double> or
                 color = linearInterpolation(color1, color2, iteration);
             }
 
-            /*
-            color = linearInterpolation(color1,color2,iteration);
-            picture.setPixel({x, y}, color);
-
-            if(iteration >= max_iteration){
-                // this removes colour from the center
-                color.r = 0;
-                color.g = 0;
-                color.b = 0;
-                picture.setPixel({x, y}, color);
-            }*/
-
             // Set pixel in buffer
             index = 4 * (y * ScreenWidth + x);
             pixels[index + 0] = color.r;
@@ -152,7 +140,7 @@ void startRenderThread(){
                     localOrigin = threadOrigin;
                 }
 
-                sf::Image temp = mandlebrot(localDelta, localOrigin);
+                sf::Image temp = mandlebrot(localDelta, localOrigin, 0, ScreenHeight);
                 if (!newRenderRequested || !HARDWARE_ACCELERATION){
                 // this if statment causes slowdowns, but it jitters when it's gone
 
@@ -170,7 +158,15 @@ void startRenderThread(){
 }
 
 
+void textUpdater(sf::Text &text, long double value, string header){
 
+    int precision = 5;
+    std::stringstream ss;
+    ss << std::scientific << std::setprecision(precision) << value;
+
+   // std::string varAsString = std::to_string(value);
+    text.setString(header+ss.str());
+}
 
 int main(){
     bool next = true;
@@ -189,10 +185,9 @@ int main(){
     long double panStep = 0.0;
 
     long double prevZoom = 0.9;
-    long double zoom = 0.9;
+    long double zoom = 1.0;
     long double baseZoom = 0.9;
-
-    int zoomSteps = 1;
+    int zoomSteps = -8;
 
     sf::RenderWindow window(sf::VideoMode({ScreenWidth, ScreenHeight}), "mandlebrot");
     window.setFramerateLimit(60);
@@ -206,11 +201,41 @@ int main(){
 
     shader.setUniform("resolution", sf::Glsl::Vec2(window.getSize().x, window.getSize().y));
 
-    //shader.setUniform("zoom",float(zoom));
+    sf::Shader crosshairShader;
+    if (!crosshairShader.loadFromFile("src/crosshair.frag", sf::Shader::Type::Fragment))
+        return -1;
 
-    //shader.setUniform("pan",sf::Glsl::Vec2(0.0f, 0.0f));
+    crosshairShader.setUniform("screenSize", sf::Glsl::Vec2(window.getSize().x, window.getSize().y));
+
+    sf::ConvexShape crosshair;
+    crosshair.setPointCount(12);
+    crosshair.setPoint(0, sf::Vector2f(0, 10));
+    crosshair.setPoint(1, sf::Vector2f(10, 10));
+    crosshair.setPoint(2, sf::Vector2f(10, 0));
+    crosshair.setPoint(3, sf::Vector2f(13, 0));
+    crosshair.setPoint(4, sf::Vector2f(13, 10));
+    crosshair.setPoint(5, sf::Vector2f(23, 10));
+    crosshair.setPoint(6, sf::Vector2f(23, 13));
+    crosshair.setPoint(7, sf::Vector2f(13, 13));
+    crosshair.setPoint(8, sf::Vector2f(13, 23));
+    crosshair.setPoint(9, sf::Vector2f(10, 23));
+    crosshair.setPoint(10, sf::Vector2f(10, 13));
+    crosshair.setPoint(11, sf::Vector2f(0, 13));
+
+    crosshair.setOrigin({12.5f, 12.5f});
+    crosshair.setPosition({ScreenWidth / 2.f, ScreenHeight / 2.f});
 
     sf::Clock clock;
+
+
+    const sf::Font font("assets/Arial.ttf");
+
+
+    sf::Text zoomText(font,"0", 30);
+    //zoomText.setStyle(sf::Text::Bold);
+    zoomText.setFillColor(sf::Color::White);
+    zoomText.setOrigin(sf::Vector2f(15,15));
+    zoomText.setPosition({15,15});
 
     window.setActive(false);
 
@@ -222,6 +247,8 @@ int main(){
         while (const std::optional event = window.pollEvent()){
 
             if (event->is<sf::Event::Closed>()){
+                renderThreadRunning = false;
+                if (renderThread.joinable()) renderThread.join();
                 return 0;
             }
             if (const auto* resized = event->getIf<sf::Event::Resized>()){
@@ -234,9 +261,12 @@ int main(){
 
                 fullscreenQuad.setSize(sf::Vector2f(resized->size.x, resized->size.y));
                 shader.setUniform("resolution", sf::Glsl::Vec2(resized->size.x, resized->size.y));
+                crosshairShader.setUniform("screenSize", sf::Glsl::Vec2(resized->size.x, resized->size.y));
 
                 ScreenWidth = resized->size.x;
                 ScreenHeight = resized->size.y;
+
+                crosshair.setPosition({ScreenWidth / 2.f, ScreenHeight / 2.f});
 
                 pictures = sf::Image({ScreenWidth, ScreenHeight}, sf::Color::Black);
                 MapTexture.resize({ScreenWidth, ScreenHeight});
@@ -244,9 +274,6 @@ int main(){
 
                 next = true;
             }
-
-
-
 
             if (const auto* mouseWheelScrolled = event->getIf<sf::Event::MouseWheelScrolled>()){
                 switch (mouseWheelScrolled->wheel){
@@ -258,7 +285,6 @@ int main(){
                         zoomSteps++;
                         prevZoom = zoom;
                         next = true;
-
                     }
                     else{
                         zoomSteps--;
@@ -379,7 +405,7 @@ int main(){
 
         if(next){
             //std::cout<<origin.x<<","<<origin.y<<" d:"<<delta.x<<","<<delta.y<<std::endl;
-            //cout<<next;
+            cout<<next;
             ScreenWidth = window.getSize().x;
             ScreenHeight = window.getSize().y;
 
@@ -403,6 +429,8 @@ int main(){
         Background.setOrigin({ScreenWidth / 2.f, ScreenHeight / 2.f});
         Background.setScale({1.0f, -1.0f});
         Background.setPosition({ScreenWidth / 2.f, ScreenHeight / 2.f});
+
+        textUpdater(zoomText,zoom,"Zoom: ");
 
         window.clear();
 
@@ -444,8 +472,8 @@ int main(){
                     //cout<<"cpu ";
                 }
                 else{
-                    window.draw(fullscreenQuad, &shader);
-                   // cout<<"shader ";
+                    window.draw(Background, &shader);
+                   //window.draw(fullscreenQuad, &shader);
                 }
             }
         }
@@ -453,6 +481,10 @@ int main(){
             std::lock_guard<std::mutex> lock(renderMutex);
             window.draw(Background);
         }
+
+        crosshairShader.setUniform("background", Background.getTexture());
+        window.draw(crosshair, &crosshairShader);
+        window.draw(zoomText);
         window.display();
     }
     renderThreadRunning = false;
